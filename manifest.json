@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "What Hacker News Says",
-  "version": "0.2.1",
-  "description": "Easily find Hacker News threads about the page you're currently browsing.",
-  "homepage_url": "https://github.com/pinoceniccola/what-hn-says-webext",
+  "name": "What Reddit Says",
+  "version": "0.1.0",
+  "description": "Easily find Reddit discussions about the page you're currently browsing.",
+  "homepage_url": "https://github.com/kiliankoe/what-reddit-says",
   "icons": {
     "16": "assets/icon-16.png",
     "32": "assets/icon-32.png",
@@ -12,19 +12,20 @@
     "128": "assets/icon-128.png",
     "256": "assets/icon-256.png"
   },
-
   "permissions": [
     "activeTab"
   ],
-
+  "host_permissions": [
+    "https://www.reddit.com/*",
+    "https://old.reddit.com/*"
+  ],
   "action": {
     "default_icon": {
       "16": "assets/icon-16.png",
       "32": "assets/icon-32.png",
       "48": "assets/icon-48.png"
     },
-    "default_title": "Click to find what HN says",
+    "default_title": "Click to find what Reddit says",
     "default_popup": "popup.html"
   }
-
 }

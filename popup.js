@@ -55,16 +55,86 @@ utils.timeSince = function(time) { // from https://stackoverflow.com/a/12475270
 
 
 
-async function askAlgolia(url) {
-  // handle special case of www/no-www versions
-  // here because it helps find more results but it's not strictly url canonicalization,
-  // so results without www will eventually show up as "related url"
-  url = url.startsWith('www.') ? url.replace(/www\./,'') : url;
+async function askReddit(url) {
+  const encodedUrl = encodeURIComponent(url);
 
-  url = encodeURIComponent(url);
-  let res = await fetch(`https://hn.algolia.com/api/v1/search?query=${url}&restrictSearchableAttributes=url&analytics=false`);
-  let data = await res.json();
-  return data;
+  try {
+    // Use old.reddit.com search to get accurate results
+    const searchUrl = `https://old.reddit.com/search?q=url:${encodedUrl}`;
+    const response = await fetch(searchUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; WhatRedditSays/1.0)' }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch from Reddit');
+    }
+
+    const html = await response.text();
+
+    // Parse HTML to extract search results
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    const searchResults = doc.querySelectorAll('.search-result.search-result-link');
+    const posts = [];
+
+    searchResults.forEach(result => {
+      try {
+        const titleEl = result.querySelector('.search-title');
+        const scoreEl = result.querySelector('.search-score');
+        const commentsEl = result.querySelector('.search-comments');
+        const timeEl = result.querySelector('time');
+        const authorEl = result.querySelector('.author');
+        const subredditEl = result.querySelector('.search-subreddit-link');
+        const linkEl = result.querySelector('.search-link');
+
+        if (!titleEl || !subredditEl) return; // Skip if essential data is missing
+
+        // Extract data
+        const title = titleEl.textContent.trim();
+        const permalinkHref = titleEl.getAttribute('href');
+        // Extract just the path (e.g., /r/subreddit/comments/...) from the full URL
+        const permalink = permalinkHref.startsWith('http')
+          ? new URL(permalinkHref).pathname
+          : permalinkHref;
+        const score = parseInt(scoreEl?.textContent.replace(/[^\d]/g, '') || '0');
+        const numComments = parseInt(commentsEl?.textContent.replace(/[^\d]/g, '') || '0');
+        const createdUtc = timeEl ? Math.floor(new Date(timeEl.getAttribute('datetime')).getTime() / 1000) : 0;
+        const author = authorEl?.textContent.trim() || '[deleted]';
+        const subreddit = subredditEl.textContent.replace('r/', '').trim();
+        const externalUrl = linkEl?.getAttribute('href') || '';
+
+        // Create a post object similar to Reddit's JSON API format
+        posts.push({
+          kind: 't3',
+          data: {
+            title: title,
+            permalink: permalink,
+            score: score,
+            num_comments: numComments,
+            created_utc: createdUtc,
+            author: author,
+            subreddit: subreddit,
+            url: externalUrl,
+            _isExactMatch: true // All results from URL search are exact matches
+          }
+        });
+      } catch (e) {
+        console.error('Error parsing search result:', e);
+      }
+    });
+
+    // Return in Reddit API format
+    return {
+      kind: 'Listing',
+      data: {
+        children: posts,
+        exactMatchCount: posts.length
+      }
+    };
+  } catch (error) {
+    throw error;
+  }
 }
 
 
@@ -135,7 +205,7 @@ chrome.tabs.query({active:true,currentWindow:true}, (tabs) => {
     // This will show the full url on mouse hover when it's truncated (too long)
     utils.getId('url-label').title = _cleanUrl;
 
-    askAlgolia(_cleanUrl).then(render).catch(render);
+    askReddit(_cleanUrl).then(render).catch(render);
 
   } else {
     render(false);
@@ -150,7 +220,7 @@ function render(data) {
   }
 
   if (data instanceof Error) {
-    $content.appendChild( utils.stringToDom(`<li class="p2 my1"><p class="mb1">Sorry, something went wrong with the Algolia API call:</p><pre class="m0">${data.message}</pre></li>`) );
+    $content.appendChild( utils.stringToDom(`<li class="p2 my1"><p class="mb1">Sorry, something went wrong with the Reddit API call:</p><pre class="m0">${data.message}</pre></li>`) );
     return;
   }
 
@@ -159,29 +229,35 @@ function render(data) {
     return;
   }
 
-  const hits = data.nbHits;
+  // Reddit returns {kind: "Listing", data: {children: [{data: {...}}]}}
+  const posts = (data.kind === 'Listing' && data.data && data.data.children) ? data.data.children : [];
+  const exactMatchCount = (data.data && data.data.exactMatchCount) ? data.data.exactMatchCount : 0;
   let _node = '';
 
-  if (!hits) {
+  if (posts.length === 0) {
 
-    _node = `<li class="p2 my1"><p class="mb1">No results for this url.</p><p class="m0"><button class="btn btn-small btn-primary h6 uppercase" data-link="https://news.ycombinator.com/submitlink?u=${encodeURIComponent(_thisUrl)}&t=${encodeURIComponent(_thisTitle)}">Submit to Hacker News</button></p></li>`;
+    _node = `<li class="p2 my1"><p class="mb1">No results for this url.</p><p class="m0"><button class="btn btn-small btn-primary h6 uppercase" data-link="https://www.reddit.com/submit?url=${encodeURIComponent(_thisUrl)}&title=${encodeURIComponent(_thisTitle)}">Submit to Reddit</button></p></li>`;
 
   } else {
 
-    const maxHits = (hits > 4) ? 4 : hits;
+    const maxPosts = (posts.length > 4) ? 4 : posts.length;
 
-    for (let i = 0; i < maxHits; i++) {
-      let _related = ( cleanUrl(data.hits[i].url).replace(/\/+$/, '') !== _cleanUrl.replace(/\/+$/, '') ) ? `<span class="block h6 gray-4 truncate">For related url: <span class="monospace">${cleanUrl(data.hits[i].url)}</span></span>` : '';
+    for (let i = 0; i < maxPosts; i++) {
+      const post = posts[i].data;
+      // Use the _isExactMatch flag we set earlier
+      const isExactMatch = post._isExactMatch === true;
+      let _related = !isExactMatch ? `<span class="block h6 gray-4 truncate">For related url: <span class="monospace">${cleanUrl(post.url)}</span></span>` : '';
       _node += `
-          <li class="py1 px2 border-bottom border-gray-2 hover-gray" data-link="https://news.ycombinator.com/item?id=${data.hits[i].objectID}">
-            <span class="block font-weight-600">${data.hits[i].title}</span>
-            <span class="block h6 gray-4"><strong class="red">${data.hits[i].points}</strong> points • <strong class="red">${data.hits[i].num_comments || 0}</strong> comments • by <strong>${data.hits[i].author}</strong> • ${utils.timeSince(data.hits[i].created_at_i*1000)}</span>
+          <li class="py1 px2 border-bottom border-gray-2 hover-gray" data-link="https://reddit.com${post.permalink}">
+            <span class="block font-weight-600">${post.title}</span>
+            <span class="block h6 gray-4"><strong style="color:#FF4500">${post.score}</strong> points • <strong style="color:#FF4500">${post.num_comments || 0}</strong> comments • in <strong>r/${post.subreddit}</strong> • by u/${post.author} • ${utils.timeSince(post.created_utc*1000)}</span>
             ${_related}
           </li>`;
     }
 
-    if (hits > 4) {
-      _node += `<li class="py1 px2"><button class="btn btn-small red h6 px0 weight-400" data-link="https://hn.algolia.com/?query=${encodeURIComponent(data.query)}">See all ${hits} stories on Algolia</button></li>`;
+    if (posts.length > 4) {
+      // Link to old.reddit.com search which shows all results
+      _node += `<li class="py1 px2"><button class="btn btn-small h6 px0 weight-400" style="color:#FF4500" data-link="https://old.reddit.com/search?q=url:${encodeURIComponent(_cleanUrl)}">See all ${posts.length} discussions on Reddit</button></li>`;
     }
 
   }

@@ -1,20 +1,22 @@
-![What Hacker News says](assets/icon-256.png)
-# What Hacker News says
-Web Extension: Easily find Hacker News discussions about the page you're browsing.
+![What Reddit says](assets/icon-256.png)
+# What Reddit says
+Web Extension: Easily find Reddit discussions about the page you're browsing.
 
 ![Screenshot](assets/screenshot.png)
 
 ## About
-Dead-simple yet very useful web extension that looks for threads on popular social news aggregator [Hacker News](https://news.ycombinator.com/news) via [HN Search API powered by Algolia](https://hn.algolia.com/api). I hacked this togheter in a few hours because I was unable to find something not bloated: For your privacy and general browser performance this extension fetches the API only when the popup is clicked and does not run any background script. It also requires minimum permissions (just `activeTab` actually).
+Dead-simple yet very useful web extension that looks for threads on [Reddit](https://www.reddit.com) via Reddit's JSON API. Forked from the "What Hacker News Says" extension. For your privacy and general browser performance this extension fetches the API only when the popup is clicked and does not run any background script. It also requires minimum permissions (just `activeTab` and accessing reddit.com actually).
+
+The extension searches for exact URL matches first, then falls back to domain-level results if no exact matches are found.
 
 ## Install
-Get the extension for [Firefox](https://addons.mozilla.org/en-US/firefox/addon/what-hacker-news-says/) or [Chrome/Chromium](https://chrome.google.com/webstore/detail/what-hacker-news-says/khgegkjchclhgpglloficdmdannlpmoi) browsers.
+Currently available as an unpacked extension for local development. Clone this repo and manually load it in your browser:
 
-You can also clone this repo and manually run it as an unpacked extension (but losing automatic future updates).
+- **Chrome/Chromium**: Go to `chrome://extensions/`, enable "Developer mode", click "Load unpacked", and select the repository folder.
+- **Firefox**: Go to `about:debugging`, click "This Firefox", click "Load Temporary Add-on", and select the `manifest.json` file.
 
 ## Changelog
 See [CHANGELOG.md](CHANGELOG.md).
 
 ## License
-© Pino Ceniccola. MIT License.
-
+© 2020 Pino Ceniccola, © 2025 Kilian Koeltzsch. MIT License.
