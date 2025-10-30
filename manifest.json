@@ -4,6 +4,11 @@
   "version": "0.1.0",
   "description": "Easily find Reddit discussions about the page you're currently browsing.",
   "homepage_url": "https://github.com/kiliankoe/what-reddit-says",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "what-reddit-says@kiliankoe.github.io"
+    }
+  },
   "icons": {
     "16": "assets/icon-16.png",
     "32": "assets/icon-32.png",
